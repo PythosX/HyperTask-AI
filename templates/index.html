@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HyperTask-AI</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body {
+            background: radial-gradient(circle at top left, #0d0614, #150a21, #08030c);
+            color: #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 0 30px rgba(121, 40, 202, 0.25);
+            border-radius: 20px;
+            padding: 30px;
+        }
+        h2 { text-align: center; margin-bottom: 20px; background: linear-gradient(135deg, #a855f7, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-size: 0.85rem; color: #a1a1aa; }
+        input {
+            width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px; color: #fff; outline: none; transition: 0.3s;
+        }
+        input:focus { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+        button {
+            width: 100%; padding: 12px; background: linear-gradient(135deg, #7928ca, #ff0080); border: none;
+            border-radius: 8px; color: white; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px;
+        }
+        button:hover { opacity: 0.9; box-shadow: 0 0 15px rgba(255, 0, 128, 0.5); }
+        .toggle-link { text-align: center; margin-top: 15px; font-size: 0.85rem; color: #a855f7; cursor: pointer; }
+        .hidden { display: none; }
+        .task-card { background: rgba(255, 255, 255, 0.05); padding: 12px; border-radius: 8px; margin-top: 10px; border-left: 4px solid #a855f7; display: flex; justify-content: space-between; align-items: center; }
+        .task-card.sent { border-left-color: #22c55e; opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- AUTH SECTION -->
+    <div id="auth-section">
+        <h2 id="auth-title">Login</h2>
+        <div class="input-group">
+            <label>Username</label>
+            <input type="text" id="username" placeholder="Enter username">
+        </div>
+        <div class="input-group">
+            <label>Password</label>
+            <input type="password" id="password" placeholder="Enter password">
+        </div>
+        <div class="input-group hidden" id="telegram-group">
+            <label>Telegram Chat ID</label>
+            <input type="text" id="telegram_id" placeholder="Get from @userinfobot">
+        </div>
+        <button id="auth-btn" onclick="handleAuth()">Login</button>
+        <div class="toggle-link" id="toggle-btn" onclick="toggleAuthMode()">Don't have an account? Sign up</div>
+    </div>
+
+    <!-- DASHBOARD SECTION -->
+    <div id="dashboard-section" class="hidden">
+        <h2>HyperTask AI</h2>
+        <p style="text-align: center; margin-bottom: 15px;" id="welcome-msg"></p>
+        
+        <div class="input-group">
+            <label>Reminder Title</label>
+            <input type="text" id="task-title" placeholder="Study Python Flask">
+        </div>
+        <div class="input-group">
+            <label>Date & Time</label>
+            <input type="datetime-local" id="task-time">
+        </div>
+        <button onclick="addSchedule()">Set Reminder</button>
+        <button onclick="logout()" style="background: #334155; margin-top: 8px;">Logout</button>
+
+        <h3 style="margin-top: 25px; font-size: 1rem;">Your Active Schedules</h3>
+        <div id="tasks-list"></div>
+    </div>
+</div>
+
+<script>
+    let isSignUp = false;
+
+    function toggleAuthMode() {
+        isSignUp = !isSignUp;
+        document.getElementById('auth-title').innerText = isSignUp ? "Sign Up" : "Login";
+        document.getElementById('auth-btn').innerText = isSignUp ? "Sign Up" : "Login";
+        document.getElementById('telegram-group').classList.toggle('hidden', !isSignUp);
+        document.getElementById('toggle-btn').innerText = isSignUp ? "Already have an account? Login" : "Don't have an account? Sign up";
+    }
+
+    async function handleAuth() {
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const telegram_id = document.getElementById('telegram_id').value;
+
+        const endpoint = isSignUp ? '/api/signup' : '/api/login';
+        const payload = isSignUp ? { username, password, telegram_id } : { username, password };
+
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            if (isSignUp) {
+                alert("Account created successfully! Please login.");
+                toggleAuthMode();
+            } else {
+                showDashboard(data.username);
+            }
+        } else {
+            alert(data.message || 'Error occurred');
+        }
+    }
+
+    function showDashboard(username) {
+        document.getElementById('auth-section').classList.add('hidden');
+        document.getElementById('dashboard-section').classList.remove('hidden');
+        document.getElementById('welcome-msg').innerText = `Welcome, ${username}!`;
+        loadSchedules();
+    }
+
+    async function addSchedule() {
+        const title = document.getElementById('task-title').value;
+        const remind_at = document.getElementById('task-time').value;
+
+        if (!title || !remind_at) return alert("Fill all fields!");
+
+        const res = await fetch('/api/schedules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, remind_at })
+        });
+
+        if (res.ok) {
+            document.getElementById('task-title').value = '';
+            loadSchedules();
+        }
+    }
+
+    async function loadSchedules() {
+        const res = await fetch('/api/schedules');
+        const data = await res.json();
+        const list = document.getElementById('tasks-list');
+        list.innerHTML = '';
+
+        data.schedules.forEach(task => {
+            const div = document.createElement('div');
+            div.className = `task-card ${task.is_sent ? 'sent' : ''}`;
+            div.innerHTML = `
+                <div>
+                    <strong>${task.title}</strong><br>
+                    <small>${task.remind_at.replace('T', ' ')}</small>
+                </div>
+                <span>${task.is_sent ? '✓ Sent' : '⏳ Pending'}</span>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    async function logout() {
+        await fetch('/api/logout', { method: 'POST' });
+        location.reload();
+    }
+</script>
+</body>
+  </html>
+  
