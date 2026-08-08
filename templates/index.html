@@ -199,6 +199,39 @@
         await fetch('/api/logout', { method: 'POST' });
         location.reload();
     }
+    document.getElementById('auth-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const telegram_id = document.getElementById('telegram_id').value.trim();
+
+    const endpoint = isSignUp ? '/api/signup' : '/api/login';
+    const payload = isSignUp ? { username, password, telegram_id } : { username, password };
+
+    try {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        console.log("Response:", data); // Check browser console (F12 or Inspect)
+
+        if (res.ok && data.success) {
+            alert(isSignUp ? "Account created successfully! Please login." : "Logged in!");
+            if (isSignUp) toggleAuthMode();
+            else showDashboard(data.username);
+        } else {
+            alert(data.message || "Signup failed!");
+        }
+    } catch (err) {
+        console.error("Fetch Error:", err);
+        alert("Server error. Check your Render logs!");
+    }
+});
+    
 </script>
 </body>
 </html>
