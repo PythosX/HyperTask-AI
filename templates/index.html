@@ -95,6 +95,29 @@
 </div>
 
 <script>
+
+    // Helper to convert 24-hour format (2026-08-08 14:19) to 12-hour format (2026-08-08 02:19 PM)
+function formatTo12Hour(dateTimeStr) {
+    if (!dateTimeStr) return '';
+    
+    // Normalize format
+    const cleanStr = dateTimeStr.replace('T', ' ');
+    const [datePart, timePart] = cleanStr.split(' ');
+    
+    if (!timePart) return dateTimeStr;
+    
+    let [hours, minutes] = timePart.split(':');
+    hours = parseInt(hours, 10);
+    
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // convert '0' to '12'
+    
+    const strHours = hours < 10 ? '0' + hours : hours;
+    
+    return `${datePart} ${strHours}:${minutes} ${ampm}`;
+    }
+    
     let isSignUp = false;
 
     function showAlert(msg, type = 'error') {
