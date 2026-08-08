@@ -13,23 +13,17 @@ app = Flask(__name__)
 # --- CONFIGURATION ---
 app.secret_key = os.environ.get("SECRET_KEY", "hypertask_default_secret_key")
 
-# Fix Render Postgres URL prefix requirement for SQLAlchemy
 db_url = os.environ.get("DATABASE_URL", "sqlite:///schedule_ai.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-# Make browser session last for 30 days
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
 db = SQLAlchemy(app)
 
-# Telegram Bot Token
-TELEGRAM_BOT_TOKEN = os.environ.get(
-    "TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE"
-)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN")
 
 
 # --- DATABASE MODELS ---
@@ -44,53 +38,52 @@ class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     title = db.Column(db.String(200), nullable=False)
-    remind_at = db.Column(db.String(50), nullable=False)
+    remind_at = db.Column(db.String(50), nullable=False)  # Always YYYY-MM-DD HH:MM
     is_sent = db.Column(db.Boolean, default=False)
 
 
-# --- INITIALIZE DATABASE ---
 with app.app_context():
     db.create_all()
 
 
-# --- TELEGRAM SENDER ---
 def send_telegram_alert(chat_id, task_title, schedule_time):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     message = f"⏰ *HYPERTASK AI ALERT*\n\n📌 *Task:* {task_title}\n🕒 *Time:* {schedule_time}"
     payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
     try:
         res = requests.post(url, json=payload, timeout=5)
+        print(f"Telegram Response Status: {res.status_code}, Body: {res.text}")
         return res.status_code == 200
     except Exception as e:
-        print(f"Error sending Telegram alert: {e}")
+        print(f"Error sending alert: {e}")
         return False
 
 
-# --- BACKGROUND TASK SCHEDULER ---
-# Inside process_due_reminders():
+# --- BACKGROUND SCHEDULER ---
 def process_due_reminders():
     with app.app_context():
+        # Keep 24-hour format so string comparisons like "2026-08-08 15:06" <= "2026-08-08 15:08" work correctly
         ist = pytz.timezone("Asia/Kolkata")
-
-        # %I is 12-hour format, %p is AM/PM (e.g., 2026-08-08 02:19 PM)
-        current_now = datetime.datetime.now(ist).strftime("%Y-%m-%d %I:%M %p")
+        current_now = datetime.datetime.now(ist).strftime("%Y-%m-%d %H:%M")
 
         try:
+            # Query pending tasks due on or before right now
             due_tasks = Schedule.query.filter(
                 Schedule.remind_at <= current_now, Schedule.is_sent == False
             ).all()
-            # ... rest of your code
-
 
             for task in due_tasks:
                 user = User.query.get(task.user_id)
                 if user and user.telegram_id:
+                    # Attempt alert
                     sent = send_telegram_alert(
                         user.telegram_id, task.title, task.remind_at
                     )
                     if sent:
                         task.is_sent = True
                         db.session.commit()
+                    else:
+                        print(f"Failed to send message to user {user.username}")
         except Exception as e:
             db.session.rollback()
             print(f"Scheduler execution error: {e}")
@@ -107,65 +100,16 @@ def home():
     return render_template("index.html")
 
 
-@app.route("/api/signup", methods=["POST"])
-def signup():
-    data = request.get_json()
-    if (
-        not data
-        or "username" not in data
-        or "password" not in data
-        or "telegram_id" not in data
-    ):
-        return (
-            jsonify({"success": False, "message": "Missing required fields"}),
-            400,
-        )
-
-    if User.query.filter_by(username=data["username"]).first():
-        return (
-            jsonify({"success": False, "message": "Username already exists"}),
-            400,
-        )
-
-    hashed_pwd = generate_password_hash(data["password"], method="pbkdf2:sha256")
-    new_user = User(
-        username=data["username"],
-        password=hashed_pwd,
-        telegram_id=str(data["telegram_id"]).strip(),
-    )
-
-    db.session.add(new_user)
-    db.session.commit()
-    return jsonify({"success": True, "message": "Account created successfully"})
-
-
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json()
-    if not data or "username" not in data or "password" not in data:
-        return (
-            jsonify({"success": False, "message": "Provide credentials"}),
-            400,
-        )
-
     user = User.query.filter_by(username=data["username"]).first()
     if user and check_password_hash(user.password, data["password"]):
-        # Permanent session state
         session.permanent = True
         session["user_id"] = user.id
         session["username"] = user.username
         return jsonify({"success": True, "username": user.username})
-
-    return (
-        jsonify({"success": False, "message": "Invalid username or password"}),
-        401,
-    )
-
-
-@app.route("/api/logout", methods=["POST"])
-def logout():
-    session.clear()
-    return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
 
 @app.route("/api/schedules", methods=["GET", "POST"])
@@ -175,7 +119,7 @@ def handle_schedules():
 
     if request.method == "POST":
         data = request.get_json()
-        # Clean datetime string format from input (replace 'T' with space)
+        # Clean datetime string format to YYYY-MM-DD HH:MM
         remind_time = data["remind_at"].replace("T", " ")
 
         new_schedule = Schedule(
@@ -202,4 +146,4 @@ def handle_schedules():
 
 if __name__ == "__main__":
     app.run(debug=True)
-            
+    
