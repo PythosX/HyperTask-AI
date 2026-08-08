@@ -12,7 +12,7 @@ HyperTask AI is a lightweight, full-stack scheduling application featuring a mod
 - **🎨 Modern Dark/Glassmorphic UI:** Clean, responsive design featuring glowing gradient aesthetics and dynamic status badges.
 - **⏰ Real-Time Background Scheduler:** Continuous task monitoring powered by `APScheduler` without manual page refreshes.
 - **📲 Telegram Push Alerts:** Free, instant notifications sent directly to your phone via custom Telegram bots.
-- **🗃️ Lightweight Database:** Powered by SQLite with SQLAlchemy ORM for zero-configuration setup.
+- **🗃️ Lightweight Database:** Powered by SQLite/PostgreSQL with SQLAlchemy ORM for seamless execution.
 
 ---
 
@@ -22,25 +22,29 @@ HyperTask AI is a lightweight, full-stack scheduling application featuring a mod
 - **Backend:** Python (Flask, Flask-SQLAlchemy)
 - **Background Engine:** APScheduler
 - **Notification Pipeline:** Telegram Bot API
-- **Database:** SQLite
+- **Deployment:** Web Hosted Live App
 
 ---
 
-## 🚀 Getting Started
+## 🌐 How to Use (Live Web App)
 
-### Prerequisites
+No installation required! You can use HyperTask AI directly through your web browser.
 
-- Python 3.8+ installed on your system.
-- A Telegram account to create your notification bot.
+### 1. Get Your Telegram Chat ID
+
+1. Open Telegram and search for `@userinfobot`.
+2. Click **Start** to retrieve your numerical **Telegram Chat ID**.
+3. Search for the HyperTask AI Bot on Telegram and send `/start` so it has permission to message you.
 
 ---
 
-### 1. Set Up Your Telegram Bot
+### 2. Access the Live App
 
-1. Open Telegram and search for `@BotFather`.
-2. Send `/newbot` and follow the prompts to create your bot.
-3. Save the **HTTP API Token** provided.
-4. Search for `@userinfobot` on Telegram to retrieve your **Telegram Chat ID**.
+1. Visit the live platform: **`https://your-website-domain.com`**
+2. Click **Sign Up**, create your account, and paste your **Telegram Chat ID**.
+3. Log in to your personal dashboard.
+4. Set a task title, pick a date and time, and click **Set Reminder**.
+5. Receive an instant automated notification on your Telegram app when the deadline hits!
 
 ---
 
