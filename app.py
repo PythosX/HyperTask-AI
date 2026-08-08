@@ -1,6 +1,7 @@
 import datetime
 import os
 from datetime import timedelta
+import pytz
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify, render_template, request, session
@@ -12,7 +13,7 @@ app = Flask(__name__)
 # --- CONFIGURATION ---
 app.secret_key = os.environ.get("SECRET_KEY", "hypertask_default_secret_key")
 
-# Render uses 'postgres://', but SQLAlchemy requires 'postgresql://'
+# Fix Render Postgres URL prefix requirement for SQLAlchemy
 db_url = os.environ.get("DATABASE_URL", "sqlite:///schedule_ai.db")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -20,7 +21,7 @@ if db_url.startswith("postgres://"):
 app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Permanent session lifetime (30 Days)
+# Make browser session last for 30 days
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
 
 db = SQLAlchemy(app)
@@ -47,7 +48,7 @@ class Schedule(db.Model):
     is_sent = db.Column(db.Boolean, default=False)
 
 
-# --- INITIALIZE TABLES ---
+# --- INITIALIZE DATABASE ---
 with app.app_context():
     db.create_all()
 
@@ -61,15 +62,17 @@ def send_telegram_alert(chat_id, task_title, schedule_time):
         res = requests.post(url, json=payload, timeout=5)
         return res.status_code == 200
     except Exception as e:
-        print(f"Error sending alert: {e}")
+        print(f"Error sending Telegram alert: {e}")
         return False
 
 
 # --- BACKGROUND TASK SCHEDULER ---
 def process_due_reminders():
     with app.app_context():
-        # Standard format without 'T' (YYYY-MM-DD HH:MM)
-        current_now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        # Fetch current time in IST (Asia/Kolkata) to match user local input
+        ist = pytz.timezone("Asia/Kolkata")
+        current_now = datetime.datetime.now(ist).strftime("%Y-%m-%d %H:%M")
+
         try:
             due_tasks = Schedule.query.filter(
                 Schedule.remind_at <= current_now, Schedule.is_sent == False
@@ -143,7 +146,7 @@ def login():
 
     user = User.query.filter_by(username=data["username"]).first()
     if user and check_password_hash(user.password, data["password"]):
-        # Make the session persistent across browser closes
+        # Permanent session state
         session.permanent = True
         session["user_id"] = user.id
         session["username"] = user.username
@@ -168,7 +171,7 @@ def handle_schedules():
 
     if request.method == "POST":
         data = request.get_json()
-        # Clean datetime string format to 'YYYY-MM-DD HH:MM'
+        # Clean datetime string format from input (replace 'T' with space)
         remind_time = data["remind_at"].replace("T", " ")
 
         new_schedule = Schedule(
@@ -195,3 +198,4 @@ def handle_schedules():
 
 if __name__ == "__main__":
     app.run(debug=True)
+            
