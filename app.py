@@ -67,16 +67,20 @@ def send_telegram_alert(chat_id, task_title, schedule_time):
 
 
 # --- BACKGROUND TASK SCHEDULER ---
+# Inside process_due_reminders():
 def process_due_reminders():
     with app.app_context():
-        # Fetch current time in IST (Asia/Kolkata) to match user local input
         ist = pytz.timezone("Asia/Kolkata")
-        current_now = datetime.datetime.now(ist).strftime("%Y-%m-%d %H:%M")
+
+        # %I is 12-hour format, %p is AM/PM (e.g., 2026-08-08 02:19 PM)
+        current_now = datetime.datetime.now(ist).strftime("%Y-%m-%d %I:%M %p")
 
         try:
             due_tasks = Schedule.query.filter(
                 Schedule.remind_at <= current_now, Schedule.is_sent == False
             ).all()
+            # ... rest of your code
+
 
             for task in due_tasks:
                 user = User.query.get(task.user_id)
