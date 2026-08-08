@@ -40,7 +40,7 @@ No installation required! You can use HyperTask AI directly through your web bro
 
 ### 2. Access the Live App
 
-1. Visit the live platform: **`https://your-website-domain.com`**
+1. Visit the live platform: **`https://hypertask-ai.onrender.com`**
 2. Click **Sign Up**, create your account, and paste your **Telegram Chat ID**.
 3. Log in to your personal dashboard.
 4. Set a task title, pick a date and time, and click **Set Reminder**.
