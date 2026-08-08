@@ -13,22 +13,10 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Telegram Bot Token (Replace via environment variable or string)
+# Telegram Bot Token
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN_HERE")
 
-def send_telegram_alert(chat_id, task_title, schedule_time):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    message = f"⏰ *HYPERTASK AI ALERT*\n\n📌 *Task:* {task_title}\n🕒 *Time:* {schedule_time}"
-    payload = {
-        "chat_id": chat_id,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Error sending alert: {e}")
-
+# --- DATABASE MODELS ---
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
@@ -42,21 +30,44 @@ class Schedule(db.Model):
     remind_at = db.Column(db.String(50), nullable=False)
     is_sent = db.Column(db.Boolean, default=False)
 
+# --- ENSURE TABLES EXIST BEFORE SCHEDULER STARTS ---
+with app.app_context():
+    db.create_all()
+
+# --- TELEGRAM SENDER ---
+def send_telegram_alert(chat_id, task_title, schedule_time):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    message = f"⏰ *HYPERTASK AI ALERT*\n\n📌 *Task:* {task_title}\n🕒 *Time:* {schedule_time}"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+    try:
+        requests.post(url, json=payload, timeout=5)
+    except Exception as e:
+        print(f"Error sending alert: {e}")
+
+# --- BACKGROUND TASK ---
 def process_due_reminders():
     with app.app_context():
         current_now = datetime.datetime.now().strftime("%Y-%m-%dT%H:%M")
-        due_tasks = Schedule.query.filter(Schedule.remind_at <= current_now, Schedule.is_sent == False).all()
-        for task in due_tasks:
-            user = User.query.get(task.user_id)
-            if user:
-                send_telegram_alert(user.telegram_id, task.title, task.remind_at)
-            task.is_sent = True
-            db.session.commit()
+        try:
+            due_tasks = Schedule.query.filter(Schedule.remind_at <= current_now, Schedule.is_sent == False).all()
+            for task in due_tasks:
+                user = User.query.get(task.user_id)
+                if user:
+                    send_telegram_alert(user.telegram_id, task.title, task.remind_at)
+                task.is_sent = True
+                db.session.commit()
+        except Exception as e:
+            print(f"Scheduler execution error: {e}")
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=process_due_reminders, trigger="interval", seconds=15)
 scheduler.start()
 
+# --- ROUTES ---
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -64,11 +75,16 @@ def home():
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.get_json()
+    if not data or 'username' not in data or 'password' not in data or 'telegram_id' not in data:
+        return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'success': False, 'message': 'Username already exists'}), 400
     
+    # Safe hashing method across Python versions
     hashed_pwd = generate_password_hash(data['password'], method='pbkdf2:sha256')
     new_user = User(username=data['username'], password=hashed_pwd, telegram_id=data['telegram_id'])
+    
     db.session.add(new_user)
     db.session.commit()
     return jsonify({'success': True, 'message': 'Account created successfully'})
@@ -105,7 +121,5 @@ def handle_schedules():
     return jsonify({'schedules': tasks})
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=True)
-
+    
